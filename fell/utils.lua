@@ -93,14 +93,14 @@ table_cat = function(tables)
 end
 
 
-function refuel()
+refuel = function()
    turtle.refuel()
    local l = turtle.getFuelLevel()
    print(l)
 end
 
 
-function load_fuel()
+load_fuel = function()
    if turtle.getFuelLevel() > 4000 then
       return true
    end

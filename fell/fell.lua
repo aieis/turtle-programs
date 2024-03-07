@@ -1,13 +1,12 @@
 require("utils")
 
-local inv_max = 16
 local max_saplings = 64 * 3 - 30
 
 local stop_block = "minecraft:polished_granite"
-local target_sapling = "minecraft:oak_sapling"
 
 local tag_log = "minecraft:logs"
-local tag_sapling = "minecraft:saplings"
+
+Dir = {F = 0, T = 1, B = 2}
 
 local logs = {
    ["minecraft:oak_log"] = 1
@@ -21,39 +20,29 @@ local saplings = {
    ["minecraft:oak_sapling"] = 3
 }
 
-local top_blocks = {
-   ["minecraft:polished_granite"]=1,
-   ["minecraft:smooth_stone"]=2,
-   ["minecraft:polished_diorite"]=3,
-   ["minecraft:polished_andesite"]=4
-}
-
 
 local accept = table_cat({logs, coals, saplings})
 
-function load_saplings()
+local function load_saplings()
    restack()
-   b = true
+   local b = true
    while b and count_total_items(saplings) < max_saplings do
-      b, reas = turtle.suckDown()
+      b = turtle.suckDown()
    end
+   restack()
 end
 
 
-function trash()
+local function trash()
    local prev_ind = 1
-   local ind = find_items(accept, prev_ind)
 
    while prev_ind < 17 do
+      local ind = find_items(accept, prev_ind)
       if ind == -1 then
-         ind = 16
+         ind = 17
       end
 
-      if prev_ind + 1 > ind -1 then
-         break
-      end
-      
-      for i = prev_ind + 1, ind-1 do
+      for i = prev_ind, ind-1 do
          turtle.select(i)
          turtle.dropDown()
       end
@@ -61,22 +50,23 @@ function trash()
    end
 end
 
+local function is_log(dir)
+   local amap = {
+      [Dir.F] = function () return turtle.inspect end,
+      [Dir.T] = function () return turtle.inspectUp() end,
+      [Dir.B] = function () return turtle.inspectDown() end,
+   }
 
-function is_log(dir)
-   local item = 0
-   if dir == 0 then
-      b, item = turtle.inspect()
-   elseif dir == 1 then
-      b, item = turtle.inspectUp()
-   elseif dir == 2 then
-      b, item = turtle.inspectDown()
+   if amap[dir] then
+      local b, item = amap[dir]()
+      if b and item and item.tags[tag_log] then return true end
    end
-   return b and item.tags[tag_log] == true
+   return false
 end
 
 
-function forward() 
-   b, block = turtle.inspect()
+local function forward()
+   local b, block = turtle.inspect()
    if b and block.tags["minecraft:leaves"] == true then
       turtle.dig()
    end
@@ -84,17 +74,17 @@ function forward()
 end
 
 
-function down()
-    b, block = turtle.inspectDown()
-    if b and block.tags["minecraft:leaves"] then
-        turtle.digDown()
-    end
-    turtle.down()
+local function down()
+   local b, block = turtle.inspectDown()
+   if b and block.tags["minecraft:leaves"] then
+      turtle.digDown()
+   end
+   turtle.down()
 end
 
-function up_steps()
+local function up_steps()
    local lsteps = 0
-   while is_log(1) do
+   while is_log(Dir.T) do
       turtle.digUp()
       turtle.up()
       lsteps = lsteps + 1
@@ -105,128 +95,95 @@ function up_steps()
    end
 end
 
-function plant_sapling()
-   for i = 1, 16 do
-      b = turtle.getItemDetail(i)
-      if b and b.name == target_sapling then
-         turtle.select(i)
-         break
-      end
-   end
-   bi = turtle.getSelectedSlot()
-   b = turtle.getItemDetail(bi)
-   if b and b.name == target_sapling then
+local function plant_sapling()
+   local ind = find_items(saplings, 1)
+   if ind ~= -1 then
       turtle.placeDown()
    end
 end
 
-function find_dir()
-    for i=1, 4 do
-        b, bl = turtle.inspect()
-        if bl.name == stop_block then
-            turtle.turnLeft()
-            turtle.turnLeft()
-            return
-        end
-        turtle.turnLeft()
+local function find_dir()
+    for _=1, 4 do
+       local _, bl = turtle.inspect()
+       if bl.name == stop_block then
+          turtle.turnLeft()
+          turtle.turnLeft()
+          return
+       end
+       turtle.turnLeft()
     end
 end
-    
 
-function fell_column()
-   local steps = 0
-   
+
+local function fell_column()
+   local operations = {
+      [Dir.F] = function () turtle.dig() turtle.forward() end,
+      [Dir.T] = up_steps,
+      [Dir.B] = function() turtle.digDown() plant_sapling() end,
+   }
+
    repeat
-      if is_log(0) then
-         turtle.dig()
-         turtle.forward()
-      elseif is_log(1) then
-         up_steps()
-      elseif is_log(2) then
-         turtle.inspectDown()
-         turtle.digDown()
-         plant_sapling()
-      else
-         forward()            
+      local cond = false
+      for dir, op in ipairs(operations) do
+         cond = is_log(dir)
+         if cond then op() break end
       end
-      b, block = turtle.inspect()
-   until b and block.name == stop_block    
+      if not cond then forward() end
+      local b, block = turtle.inspect()
+   until b and block.name == stop_block
 end
 
-function check_op()
-   b, block = turtle.inspectUp()
-   if not b then
-      return nil
-   end
+local function block_operations()
+   local top_blocks = {
+      ["minecraft:polished_granite"] = load_fuel,
+      ["minecraft:smooth_stone"] = unload,
+      ["minecraft:polished_diorite"] = load_saplings,
+      ["minecraft:polished_andesite"] = trash
+   }
 
-   res = top_blocks[block.name]
-   if not res then
-      return nil
-   end
-   
-   if res == 1 then
-      print("Loading Fuel")
-      load_fuel()
-   elseif res == 2 then
-      print("Unloading")
-      unload(logs)
-   elseif res == 3 then
-      print("Loading Saplings")
-      load_saplings()
-      print("Loaded Saplings")
-   elseif res == 4 then
-      print("Trashing")
-      trash()
-   end
+   local b, block = turtle.inspectUp()
 
-   return res
+   if b and block and top_blocks[block.name] then
+      top_blocks[block.name]()
+      return true
+   end
+   return false
 end
 
-function do_round(gdir)
-   local dir = gdir
+local function do_round()
+   local left = true
    repeat
       fell_column()
-      res = check_op()
-      if dir == 1 then
-         turtle.turnLeft()
-         forward()
-         turtle.turnLeft()
-         dir = -1
-         
-      elseif dir == -1 then
-         turtle.turnRight()
-         forward()
-         turtle.turnRight()
-         dir = 1
-      end
-      res = check_op()
-      b, block = turtle.inspect()
-      if b and blocklname == stop_block then
-         dir = dir * -1
-         turtle.turnRight(); turtle.turnRight();
-      end
+
+      local uturn = left and turtle.turnLeft or turtle.turnRight
+
+      uturn()
+      forward()
+      uturn()
+
+      left = not left
+      local res = block_operations()
    until res
 end
 
-find_elevation = function(stop_block)
+local function find_elevation()
+   plant_sapling()
    up_steps()
-   for i=1,3 do
+   for _=1,3 do
       plant_sapling()
       turtle.down()
    end
-   
+
    fell_column()
 end
 
-
-function run()
+local function run()
    find_dir()
    find_elevation()
-   local gdir = 1
    while 1 do
-      local res = do_round(gdir)
-      gdir = gdir * -1
+      do_round()
+      os.sleep(2)
    end
 end
 
-run()        
+run()
