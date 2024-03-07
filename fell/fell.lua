@@ -6,7 +6,7 @@ local stop_block = "minecraft:polished_granite"
 
 local tag_log = "minecraft:logs"
 
-Dir = {F = 0, T = 1, B = 2}
+Dir = {F = 1, T = 2, B = 3}
 
 local logs = {
    ["minecraft:oak_log"] = 1
@@ -52,7 +52,7 @@ end
 
 local function is_log(dir)
    local amap = {
-      [Dir.F] = function () return turtle.inspect end,
+      [Dir.F] = function () return turtle.inspect() end,
       [Dir.T] = function () return turtle.inspectUp() end,
       [Dir.B] = function () return turtle.inspectDown() end,
    }
@@ -117,7 +117,7 @@ end
 
 local function fell_column()
    local operations = {
-      [Dir.F] = function () turtle.dig() turtle.forward() end,
+      [Dir.F] = function () turtle.dig() forward() end,
       [Dir.T] = up_steps,
       [Dir.B] = function() turtle.digDown() plant_sapling() end,
    }
@@ -131,12 +131,14 @@ local function fell_column()
       if not cond then forward() end
       local b, block = turtle.inspect()
    until b and block.name == stop_block
+
+   print("Done felling column")
 end
 
 local function block_operations()
    local top_blocks = {
       ["minecraft:polished_granite"] = load_fuel,
-      ["minecraft:smooth_stone"] = unload,
+      ["minecraft:smooth_stone"] = function () unload(logs) end,
       ["minecraft:polished_diorite"] = load_saplings,
       ["minecraft:polished_andesite"] = trash
    }
