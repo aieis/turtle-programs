@@ -184,7 +184,7 @@ local function run()
    find_elevation()
    while 1 do
       do_round()
-      os.sleep(2)
+      os.sleep(60)
    end
 end
 
